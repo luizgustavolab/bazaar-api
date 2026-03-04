@@ -1,0 +1,41 @@
+{
+  "name": "bazaar-api-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "seed": "ts-node prisma/seed.ts",
+    "dev": "concurrently -p \"name\" -n \"API,WORKER,CRAWLER\" -c \"cyan,green,magenta\" \"npm:dev:api\" \"npm:dev:worker\" \"npm:dev:crawler\"",
+    "dev:api": "cd apps/api && ts-node-dev --respawn --transpile-only --clear src/server.ts",
+"dev:worker": "cd apps/worker && ts-node-dev --respawn --transpile-only --clear src/index.ts",
+"dev:crawler": "cd apps/crawler && ts-node-dev --respawn --transpile-only --clear src/index.ts",
+    "build": "tsc -b",
+    "lint": "eslint \"apps/**/*.{ts,js}\"",
+    "format": "prettier --write ."
+  },
+  "dependencies": {
+    "@prisma/client": "^5.6.0",
+    "bullmq": "^5.70.1",
+    "fastify": "^4.28.0",
+    "ioredis": "^5.3.0",
+    "prisma": "^5.6.0",
+    "sqlite3": "^5.1.7"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/sqlite3": "^3.1.11",
+    "@typescript-eslint/eslint-plugin": "^8.56.1",
+    "@typescript-eslint/parser": "^8.56.1",
+    "concurrently": "^8.2.0",
+    "eslint": "^8.57.1",
+    "globals": "^17.4.0",
+    "prettier": "^3.2.0",
+    "ts-node": "^10.9.1",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.2.2",
+    "typescript-eslint": "^8.56.1"
+  }
+}
