@@ -1,32 +1,24 @@
-import { FastifyRequest, FastifyReply } from "fastify";
-import { prisma } from "../prismaClient";
-import { CreateCharacterDto } from "../types/character";
+import { FastifyInstance } from "fastify";
+import prisma from "../prismaClient";
 
-export async function listCharacters(
-  _request: FastifyRequest,
-  reply: FastifyReply,
-) {
-  const characters = await prisma.character.findMany({
-    include: { auction: true },
-  });
-  return reply.send(characters);
-}
-
-export async function createCharacter(
-  request: FastifyRequest<{ Body: CreateCharacterDto }>,
-  reply: FastifyReply,
-) {
-  const { name, vocation, level, world, price, endsAt } = request.body;
-
-  const character = await prisma.character.create({
-    data: { name, vocation, level, world },
-  });
-
-  if (price && endsAt) {
-    await prisma.auction.create({
-      data: { characterId: character.id, price, endsAt: new Date(endsAt) },
+export async function characterRoutes(fastify: FastifyInstance) {
+  fastify.get("/characters", async () => {
+    const characters = await prisma.character.findMany({
+      orderBy: { level: "desc" },
+      take: 50,
     });
-  }
+    return characters;
+  });
 
-  return reply.send(character);
+  fastify.get("/characters/:id", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const character = await prisma.character.findUnique({
+      where: { id: parseInt(id) },
+    });
+    if (!character) {
+      reply.status(404).send({ error: "Character not found" });
+      return;
+    }
+    return character;
+  });
 }

@@ -12,7 +12,6 @@ export async function characterRoutes(fastify: FastifyInstance) {
   });
 
   fastify.get("/characters", async () => {
-    console.log("Chamando a rota de personagens...");
     const characters = await prisma.character.findMany({
       include: {
         auction: true,

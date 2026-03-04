@@ -1,8 +1,7 @@
-import { FastifyReply, FastifyRequest } from "fastify";
+import { FastifyInstance } from "fastify";
 
-export async function getHealth(
-  _request: FastifyRequest,
-  _reply: FastifyReply,
-) {
-  return { status: "ok" };
+export async function healthRoutes(fastify: FastifyInstance) {
+  fastify.get("/health", async () => {
+    return { status: "ok" };
+  });
 }
