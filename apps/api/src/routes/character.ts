@@ -40,11 +40,15 @@ export async function characterRoutes(fastify: FastifyInstance) {
     }
 
     if (vocation) {
-      where.vocation = { contains: vocation };
+      where.vocation = {
+        contains: vocation,
+      };
     }
 
     if (world) {
-      where.world = { equals: world };
+      where.world = {
+        contains: world,
+      };
     }
 
     if (minLevel || maxLevel) {
