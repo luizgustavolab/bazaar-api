@@ -8,7 +8,6 @@ const app = Fastify({
 // Registrar as rotas do arquivo externo
 app.register(characterRoutes);
 
-
 app.get("/health", async () => {
   return { status: "OK - CODIGO ATUALIZADO 123" };
 });

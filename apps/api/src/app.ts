@@ -1,6 +1,6 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
-import { characterRoutes } from "./controllers/characterController";
+import { characterRoutes } from "./routes/character";
 import { healthRoutes } from "./controllers/healthController";
 
 const app = Fastify({ logger: true });

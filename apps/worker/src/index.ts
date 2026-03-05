@@ -92,18 +92,28 @@ new Worker(
       try {
         const nowInSeconds = Math.floor(Date.now() / 1000).toString();
 
+        // 1. Buscamos os IDs dos leilões que expiraram
         const expiredAuctions = await prisma.auction.findMany({
           where: { endsAt: { lt: nowInSeconds } },
-          select: { characterId: true },
+          select: { id: true, characterId: true },
         });
 
         if (expiredAuctions.length > 0) {
+          const auctionIds = expiredAuctions.map((a) => a.id);
           const characterIds = expiredAuctions.map((a) => a.characterId);
+
+          // 2. Primeiro deletamos os LEILÕES (Auction)
+          await prisma.auction.deleteMany({
+            where: { id: { in: auctionIds } },
+          });
+
+          // 3. Agora que os leilões sumiram, deletamos os PERSONAGENS (Character)
           await prisma.character.deleteMany({
             where: { id: { in: characterIds } },
           });
+
           console.log(
-            `[CLEANUP-WORKER] Removidos ${characterIds.length} personagens de leiloes expirados.`,
+            `[CLEANUP-WORKER] Removidos ${auctionIds.length} leilões e seus personagens correspondentes.`,
           );
         }
       } catch (error) {

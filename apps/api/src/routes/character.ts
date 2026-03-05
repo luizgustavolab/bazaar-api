@@ -4,10 +4,14 @@ import prisma from "../prismaClient";
 import { formatCharacterData } from "../utils/formatters";
 
 interface CharacterQuery {
+  name?: string;
   vocation?: string;
   world?: string;
   minLevel?: string;
   maxLevel?: string;
+  sortBy?: "price_asc" | "price_desc" | "level_asc" | "level_desc";
+  page?: string;
+  limit?: string;
 }
 
 export async function characterRoutes(fastify: FastifyInstance) {
@@ -19,10 +23,21 @@ export async function characterRoutes(fastify: FastifyInstance) {
   });
 
   fastify.get("/characters", async (request) => {
-    const { vocation, world, minLevel, maxLevel } =
+    const { name, vocation, world, minLevel, maxLevel, sortBy, page, limit } =
       request.query as CharacterQuery;
 
-    const where: Prisma.CharacterWhereInput = {};
+    const currentPage = parseInt(page || "1");
+    const itemsPerPage = parseInt(limit || "20");
+    const skip = (currentPage - 1) * itemsPerPage;
+
+    const where: Prisma.CharacterWhereInput = {
+      level: { gt: 0 },
+      vocation: { not: "" },
+    };
+
+    if (name) {
+      where.name = { contains: name };
+    }
 
     if (vocation) {
       where.vocation = { contains: vocation };
@@ -33,22 +48,38 @@ export async function characterRoutes(fastify: FastifyInstance) {
     }
 
     if (minLevel || maxLevel) {
-      where.level = {
-        ...(minLevel && { gte: parseInt(minLevel) }),
-        ...(maxLevel && { lte: parseInt(maxLevel) }),
-      };
+      const levelFilter: Prisma.IntFilter = { gt: 0 };
+      if (minLevel) levelFilter.gte = parseInt(minLevel);
+      if (maxLevel) levelFilter.lte = parseInt(maxLevel);
+      where.level = levelFilter;
     }
 
-    const characters = await prisma.character.findMany({
-      where,
-      include: {
-        auction: true,
-      },
-      orderBy: { level: "desc" },
-      take: 50,
-    });
+    let orderBy: Prisma.CharacterOrderByWithRelationInput = { level: "desc" };
+    if (sortBy === "level_asc") orderBy = { level: "asc" };
+    if (sortBy === "level_desc") orderBy = { level: "desc" };
+    if (sortBy === "price_asc") orderBy = { auction: { price: "asc" } };
+    if (sortBy === "price_desc") orderBy = { auction: { price: "desc" } };
 
-    return characters.map(formatCharacterData);
+    const [totalItems, characters] = await Promise.all([
+      prisma.character.count({ where }),
+      prisma.character.findMany({
+        where,
+        include: { auction: true },
+        orderBy,
+        skip,
+        take: itemsPerPage,
+      }),
+    ]);
+
+    return {
+      metadata: {
+        total: totalItems,
+        page: currentPage,
+        totalPages: Math.ceil(totalItems / itemsPerPage),
+        hasMore: skip + characters.length < totalItems,
+      },
+      data: characters.map(formatCharacterData),
+    };
   });
 
   fastify.get("/characters/:id", async (request, reply) => {
@@ -63,7 +94,9 @@ export async function characterRoutes(fastify: FastifyInstance) {
       return reply.status(404).send({ error: "Character not found" });
     }
 
-    return formatCharacterData(character);
+    return formatCharacterData(
+      character as Parameters<typeof formatCharacterData>[0],
+    );
   });
 
   fastify.delete("/characters/expired", async (_request, reply) => {
@@ -77,23 +110,33 @@ export async function characterRoutes(fastify: FastifyInstance) {
           },
         },
         select: {
+          id: true,
           characterId: true,
         },
       });
 
+      if (expiredAuctions.length === 0) {
+        return { message: "Nenhum leilão para limpar", count: 0 };
+      }
+
+      const auctionIds = expiredAuctions.map((a) => a.id);
       const characterIds = expiredAuctions.map((a) => a.characterId);
 
-      const deleted = await prisma.character.deleteMany({
+      await prisma.auction.deleteMany({
         where: {
-          id: {
-            in: characterIds,
-          },
+          id: { in: auctionIds },
+        },
+      });
+
+      const deletedCharacters = await prisma.character.deleteMany({
+        where: {
+          id: { in: characterIds },
         },
       });
 
       return {
         message: "Limpeza concluída",
-        count: deleted.count,
+        count: deletedCharacters.count,
       };
     } catch (error) {
       fastify.log.error(error);
