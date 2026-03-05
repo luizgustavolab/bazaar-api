@@ -1,4 +1,4 @@
-import { Worker, Job } from "bullmq";
+import { Worker, Job, Queue } from "bullmq";
 import IORedis from "ioredis";
 import { PrismaClient } from "@prisma/client";
 
@@ -9,6 +9,22 @@ const connection = new IORedis({
   port: Number(process.env.REDIS_PORT) || 6379,
   maxRetriesPerRequest: null,
 });
+
+const cleanupQueue = new Queue("cleanup-queue", {
+  connection: connection as unknown as Queue["opts"]["connection"],
+});
+
+async function setupCleanupJob() {
+  await cleanupQueue.add(
+    "clean-expired-auctions",
+    {},
+    {
+      repeat: {
+        pattern: "0 * * * *",
+      },
+    },
+  );
+}
 
 new Worker(
   "bazaar-queue",
@@ -63,8 +79,40 @@ new Worker(
     }
   },
   {
-    connection: connection as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+    connection: connection as unknown as Worker["opts"]["connection"],
     removeOnComplete: { count: 100 },
     removeOnFail: { count: 500 },
   },
 );
+
+new Worker(
+  "cleanup-queue",
+  async (job: Job) => {
+    if (job.name === "clean-expired-auctions") {
+      try {
+        const nowInSeconds = Math.floor(Date.now() / 1000).toString();
+
+        const expiredAuctions = await prisma.auction.findMany({
+          where: { endsAt: { lt: nowInSeconds } },
+          select: { characterId: true },
+        });
+
+        if (expiredAuctions.length > 0) {
+          const characterIds = expiredAuctions.map((a) => a.characterId);
+          await prisma.character.deleteMany({
+            where: { id: { in: characterIds } },
+          });
+          console.log(
+            `[CLEANUP-WORKER] Removidos ${characterIds.length} personagens de leiloes expirados.`,
+          );
+        }
+      } catch (error) {
+        console.error("[CLEANUP-WORKER] Erro ao limpar leiloes:", error);
+        throw error;
+      }
+    }
+  },
+  { connection: connection as unknown as Worker["opts"]["connection"] },
+);
+
+setupCleanupJob();

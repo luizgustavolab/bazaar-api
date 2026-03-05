@@ -1,6 +1,6 @@
 import { Queue } from "bullmq";
 import IORedis from "ioredis";
-import { fetchAllActiveAuctions } from "./services/bazaarScraper";
+import { fetchAllActiveAuctions, AuctionData } from "./services/bazaarScraper";
 
 const connection = new IORedis({
   host: process.env.REDIS_HOST || "127.0.0.1",
@@ -8,38 +8,47 @@ const connection = new IORedis({
   maxRetriesPerRequest: null,
 });
 
-const bazaarQueue = new Queue("bazaar-queue", { connection });
+const bazaarQueue = new Queue("bazaar-queue", {
+  connection: connection as unknown as Queue["opts"]["connection"],
+});
 
 async function startCrawler() {
   try {
-    const auctions = await fetchAllActiveAuctions();
+    let totalSent = 0;
 
-    for (const item of auctions) {
-      await bazaarQueue.add(
-        "process-auction",
-        {
-          name: item.name,
-          level: item.level,
-          vocation: item.vocation,
-          world: item.world,
-          outfitUrl: item.outfitUrl,
-          skills: item.skills,
-          items: item.items,
-          price: item.currentBid,
-          endsAt: item.endDate,
-        },
-        {
-          removeOnComplete: true,
-          attempts: 3,
-          backoff: {
-            type: "exponential",
-            delay: 1000,
+    await fetchAllActiveAuctions(async (items: AuctionData[]) => {
+      for (const item of items) {
+        await bazaarQueue.add(
+          "process-auction",
+          {
+            name: item.name,
+            level: item.level,
+            vocation: item.vocation,
+            world: item.world,
+            outfitUrl: item.outfitUrl,
+            price: item.currentBid,
+            endsAt: item.endDate,
+            auctionId: item.auctionId,
           },
-        },
+          {
+            removeOnComplete: true,
+            attempts: 3,
+            backoff: {
+              type: "exponential",
+              delay: 1000,
+            },
+          },
+        );
+      }
+      totalSent += items.length;
+      console.log(
+        `[CRAWLER] ${items.length} leiloes da pagina enviados para a fila. Total ate agora: ${totalSent}`,
       );
-    }
+    });
 
-    console.log(`[CRAWLER] ${auctions.length} leilões enviados para a fila.`);
+    console.log(
+      `[CRAWLER] Finalizado. Total de ${totalSent} leiloes sincronizados.`,
+    );
   } catch (error) {
     console.error("[CRAWLER] Erro ao executar:", error);
   } finally {

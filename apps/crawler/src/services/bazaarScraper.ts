@@ -1,5 +1,5 @@
 import * as cheerio from "cheerio";
-import axios from "axios";
+import axios, { AxiosError } from "axios";
 
 export interface AuctionData {
   auctionId: number;
@@ -14,12 +14,39 @@ export interface AuctionData {
   items: string[];
 }
 
-export async function fetchBazaarPage(pageNumber: number = 1): Promise<string> {
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+export async function fetchBazaarPage(
+  pageNumber: number = 1,
+  retries = 3,
+): Promise<string> {
   const url = `https://www.tibia.com/charactertrade/?subtopic=currentcharactertrades&currentpage=${pageNumber}`;
-  const { data } = await axios.get(url, {
-    headers: { "User-Agent": "Mozilla/5.0" },
-  });
-  return data;
+
+  const headers = {
+    "User-Agent":
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    Accept:
+      "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+  };
+
+  try {
+    const { data } = await axios.get(url, { headers });
+    return data;
+  } catch (error: unknown) {
+    if (retries > 0 && error instanceof AxiosError) {
+      const status = error.response?.status;
+      if (status === 403 || status === 429) {
+        const waitTime = (4 - retries) * 5000;
+        console.warn(
+          `[SCRAPER] Bloqueio detectado na pág ${pageNumber}. Tentando novamente em ${waitTime / 1000}s... (${retries} tentativas restantes)`,
+        );
+        await sleep(waitTime);
+        return fetchBazaarPage(pageNumber, retries - 1);
+      }
+    }
+    throw error;
+  }
 }
 
 export function parseBazaarHTML(html: string): AuctionData[] {
@@ -90,15 +117,47 @@ export function parseBazaarHTML(html: string): AuctionData[] {
   return auctions;
 }
 
-export async function fetchAllActiveAuctions(): Promise<AuctionData[]> {
-  const allResults: AuctionData[] = [];
-  const page = 1;
-  const html = await fetchBazaarPage(page);
-  const items = parseBazaarHTML(html);
+export async function fetchAllActiveAuctions(
+  onPageProcessed: (items: AuctionData[]) => Promise<void>,
+): Promise<void> {
+  let currentPage = 1;
+  let totalPages = 1;
 
-  if (items.length > 0) {
-    allResults.push(...items);
+  try {
+    do {
+      console.log(`[SCRAPER] Buscando pagina ${currentPage}...`);
+      const html = await fetchBazaarPage(currentPage);
+
+      if (currentPage === 1) {
+        totalPages = parseTotalPages(html);
+        console.log(`[SCRAPER] Total de paginas detectadas: ${totalPages}`);
+      }
+
+      const items = parseBazaarHTML(html);
+
+      if (items.length > 0) {
+        await onPageProcessed(items);
+      }
+
+      currentPage++;
+
+      if (currentPage <= totalPages) {
+        await sleep(2000);
+      }
+    } while (currentPage <= totalPages);
+  } catch (error) {
+    console.error("[SCRAPER] Erro fatal na captura das paginas:", error);
+  }
+}
+
+function parseTotalPages(html: string): number {
+  const $ = cheerio.load(html);
+  const lastPageLink = $(".PageNavigation .PageLink:last-child a").attr("href");
+
+  if (lastPageLink) {
+    const match = lastPageLink.match(/currentpage=(\d+)/);
+    return match ? parseInt(match[1], 10) : 1;
   }
 
-  return allResults;
+  return 1;
 }

@@ -1,19 +1,46 @@
 import { FastifyInstance } from "fastify";
+import { Prisma } from "@prisma/client";
 import prisma from "../prismaClient";
 import { formatCharacterData } from "../utils/formatters";
 
+interface CharacterQuery {
+  vocation?: string;
+  world?: string;
+  minLevel?: string;
+  maxLevel?: string;
+}
+
 export async function characterRoutes(fastify: FastifyInstance) {
-  // Rota raiz para evitar 404 em http://localhost:3333/
   fastify.get("/", async () => {
     return {
       message: "Tibia Scout API",
-      endpoints: ["/characters", "/health"],
+      endpoints: ["/characters", "/characters/expired", "/health"],
     };
   });
 
-  fastify.get("/characters", async () => {
-    console.log("Chamando a rota de personagens...");
+  fastify.get("/characters", async (request) => {
+    const { vocation, world, minLevel, maxLevel } =
+      request.query as CharacterQuery;
+
+    const where: Prisma.CharacterWhereInput = {};
+
+    if (vocation) {
+      where.vocation = { equals: vocation };
+    }
+
+    if (world) {
+      where.world = { equals: world };
+    }
+
+    if (minLevel || maxLevel) {
+      where.level = {
+        ...(minLevel && { gte: parseInt(minLevel) }),
+        ...(maxLevel && { lte: parseInt(maxLevel) }),
+      };
+    }
+
     const characters = await prisma.character.findMany({
+      where,
       include: {
         auction: true,
       },
@@ -21,7 +48,6 @@ export async function characterRoutes(fastify: FastifyInstance) {
       take: 50,
     });
 
-    // É essencial usar o .map aqui para transformar as strings do SQLite em Arrays reais
     return characters.map(formatCharacterData);
   });
 
@@ -38,5 +64,40 @@ export async function characterRoutes(fastify: FastifyInstance) {
     }
 
     return formatCharacterData(character);
+  });
+
+  fastify.delete("/characters/expired", async (_request, reply) => {
+    try {
+      const nowInSeconds = Math.floor(Date.now() / 1000).toString();
+
+      const expiredAuctions = await prisma.auction.findMany({
+        where: {
+          endsAt: {
+            lt: nowInSeconds,
+          },
+        },
+        select: {
+          characterId: true,
+        },
+      });
+
+      const characterIds = expiredAuctions.map((a) => a.characterId);
+
+      const deleted = await prisma.character.deleteMany({
+        where: {
+          id: {
+            in: characterIds,
+          },
+        },
+      });
+
+      return {
+        message: "Limpeza concluída",
+        count: deleted.count,
+      };
+    } catch (error) {
+      fastify.log.error(error);
+      return reply.status(500).send({ error: "Internal Server Error" });
+    }
   });
 }
