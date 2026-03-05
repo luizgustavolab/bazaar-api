@@ -25,7 +25,7 @@ export async function characterRoutes(fastify: FastifyInstance) {
     const where: Prisma.CharacterWhereInput = {};
 
     if (vocation) {
-      where.vocation = { equals: vocation };
+      where.vocation = { contains: vocation };
     }
 
     if (world) {

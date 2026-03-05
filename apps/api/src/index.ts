@@ -8,10 +8,6 @@ const app = Fastify({
 // Registrar as rotas do arquivo externo
 app.register(characterRoutes);
 
-// Rota de teste DIRETA no index para diagnosticar o 404
-app.get("/", async () => {
-  return { message: "Index carregado com sucesso!" };
-});
 
 app.get("/health", async () => {
   return { status: "OK - CODIGO ATUALIZADO 123" };

@@ -29,6 +29,8 @@ async function startCrawler() {
             price: item.currentBid,
             endsAt: item.endDate,
             auctionId: item.auctionId,
+            skills: item.skills,
+            items: item.items,
           },
           {
             removeOnComplete: true,
