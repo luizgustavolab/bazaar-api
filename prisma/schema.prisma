@@ -8,24 +8,24 @@ datasource db {
 }
 
 model Character {
-  id          Int      @id @default(autoincrement())
-  name        String   @unique
-  vocation    String
-  level       Int
-  world       String
-  outfitUrl   String?
-  skills      String?
-  items       String?
-  auction     Auction?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  vocation  String
+  level     Int
+  world     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  items     String?
+  outfitUrl String?
+  skills    String?
+  auction   Auction?
 }
 
 model Auction {
   id          Int       @id @default(autoincrement())
-  character   Character @relation(fields: [characterId], references: [id])
   characterId Int       @unique
   price       Int
   startedAt   DateTime  @default(now())
   endsAt      String
+  character   Character @relation(fields: [characterId], references: [id])
 }
