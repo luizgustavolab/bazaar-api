@@ -33,8 +33,8 @@ new Worker(
           vocation,
           world,
           outfitUrl,
-          skills: JSON.stringify(skills),
-          items: JSON.stringify(items),
+          skills: skills ? JSON.stringify(skills) : "{}",
+          items: items ? JSON.stringify(items) : "[]",
           auction: {
             upsert: {
               create: { price, endsAt },
@@ -48,8 +48,8 @@ new Worker(
           vocation,
           world,
           outfitUrl,
-          skills: JSON.stringify(skills),
-          items: JSON.stringify(items),
+          skills: skills ? JSON.stringify(skills) : "{}",
+          items: items ? JSON.stringify(items) : "[]",
           auction: {
             create: { price, endsAt },
           },
@@ -63,7 +63,7 @@ new Worker(
     }
   },
   {
-    connection,
+    connection: connection as any, // eslint-disable-line @typescript-eslint/no-explicit-any
     removeOnComplete: { count: 100 },
     removeOnFail: { count: 500 },
   },
