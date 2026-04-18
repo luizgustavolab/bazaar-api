@@ -28,6 +28,10 @@ Um dos maiores desafios foi a compatibilidade de versões entre o core do Fastif
 Deploy e Network Binding
 Para o funcionamento correto no ambiente de nuvem (Railway), a aplicação foi reconfigurada para realizar o bind no host 0.0.0.0. Isso permitiu que o Proxy do Railway realizasse o roteamento de tráfego externo para a porta interna 3333, resolvendo erros críticos de SIGTERM e falhas de Health Check.
 
+ATENÇÃO:  🚀
+
+**Nota sobre o Railway:** O projeto utiliza uma arquitetura de monorepo que demanda execução constante do Worker/Crawler. É importante notar que o plano **Trial do Railway** possui limitações de créditos e tempo. Após a expiração desse período de teste, a plataforma suspende os serviços, exigindo um upgrade para o plano pago (Hobby) para manter a API e o banco de dados ativos. O downgrade é inviável para a execução do projeto.
+
 Como Rodar o Projeto
 Pré-requisitos
 Node.js v22 ou superior
@@ -66,4 +70,3 @@ HOST=0.0.0.0
 DATABASE_URL="file:./prisma/dev.db"
 👨‍💻 Desenvolvedor
 Luiz Gustavo (luizgustavolab)
-Focado em Clean Code, Arquitetura de Sistemas e Automação.
