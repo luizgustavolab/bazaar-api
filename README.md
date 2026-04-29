@@ -1,72 +1,89 @@
-Bazaar API - Tibia Scout Backend
-Este é o motor central do projeto Tibia Scout, desenvolvido para realizar o scraping, processamento e distribuição de dados do Tibia Bazaar. O projeto utiliza uma arquitetura de alta performance focada em escalabilidade e consistência de dados.
+## 🛡️⚙️ Bazaar API - Tibia Scout Backend 
+Este é o motor central do ecossistema Tibia Scout. Ele é responsável pelo web scraping de alta performance, processamento de dados do Tibia Bazaar (CipSoft) e distribuição desses dados via API REST.
 
-Arquitetura do Projeto
-O backend foi construído utilizando o conceito de NPM Workspaces (Monorepo), permitindo a gestão de múltiplos pacotes em um único repositório:
+Este projeto atua como o Backend obrigatório para o funcionamento das funcionalidades de mercado do projeto:
+🔗 Tibia Scout Frontend [https://github.com/luizgustavolab/tibia-scout.git](https://github.com/luizgustavolab/tibia-scout.git)
 
-api: Servidor REST construído com Fastify 4 para entrega de dados.
+## 🏗️ Arquitetura do Projeto
+>- O projeto utiliza o conceito de NPM Workspaces (Monorepo). Essa estrutura permite que a API e os serviços de coleta compartilhem tipos e lógica de banco de dados, mantendo a separação de responsabilidades:
+    apps/api: Servidor Fastify que entrega os dados processados ao Frontend.
+    apps/crawler: Motor de scraping que extrai dados brutos do site oficial do Tibia.
+    apps/worker: Orquestrador de tarefas que gerencia a persistência e atualização do banco de dados.
 
-crawler: Motor de web scraping para coleta de dados do site oficial.
+## 🛠️ Stack Tecnológica
+- Runtime: Node.js (v20+) + TypeScript
+- Framework Web: Fastify v4
+- ORM: Prisma (v5+)
+- Banco de Dados: SQLite (Foco em portabilidade e baixo custo)
+- Fila/Tasks: BullMQ + Redis (opcional para processamento assíncrono)
+- Agendamento: Node-cron
 
-worker: Processamento de tarefas em segundo plano.
+## ⚠️ Notas Importantes de Infraestrutura (Atenção ao Deploy)
+1. **Limitações do Railway (Plano Gratuito)**
+- O projeto foi desenhado para rodar no Railway, mas é vital entender as regras da plataforma:
+>- Plano Trial: O Railway oferece um crédito inicial/tempo limitado. Após o término desse período, o projeto é suspenso automaticamente.
+>- Continuidade: Não é possível realizar um downgrade para manter o projeto gratuito após o Trial. É necessário o upgrade para o plano Hobby (pago) para garantir que o banco de dados e os cronjobs continuem operando.
 
-Stack Tecnológica
-Runtime: Node.js + TypeScript
+2. **Network Binding**
+- Para deploys em containers (Docker/Fly/Railway), o servidor está configurado para o host 0.0.0.0 na porta 3333. Isso é essencial para que o proxy reverso da hospedagem consiga rotear o tráfego para a aplicação.
 
-Framework Web: Fastify v4
+## 🚀 Guia do Programador: Como Rodar Localmente
+📋 Pré-requisitos
+- Node.js v22 ou superior.
+- NPM ou PNPM.
 
-ORM: Prisma
+## 🔧 Instalação Passo a Passo
+1. **Clone o repositório:**
+    git clone [https://github.com/luizgustavolab/bazaar-api.git](https://github.com/luizgustavolab/bazaar-api.git) 
+    cd bazaar-api
 
-Banco de Dados: SQLite
+2. **Instale as dependências (Raiz do Monorepo):**
+    npm install
 
-Infraestrutura: Railway (Cloud)
+3. **Configuração do Banco de Dados:**
+- Gere o cliente do Prisma e sincronize o esquema com o seu arquivo SQLite local:
+    npx prisma generate
+    npx prisma db push
 
-Desafios Técnicos Superados
-Gestão de Dependências e CORS
-Um dos maiores desafios foi a compatibilidade de versões entre o core do Fastify e seus plugins. Para garantir a segurança e a comunicação com o frontend (Tibia Scout), foi implementado o downgrade estratégico do @fastify/cors para a versão 8.x, compatibilizando-o com o ecossistema Fastify 4 utilizado no projeto.
+4. **Variáveis de Ambiente:**
+>- Crie um arquivo .env na raiz do projeto. O Redis é obrigatório para a orquestração das tarefas do Crawler:
+    PORT=3333
+    HOST=0.0.0.0
+    DATABASE_URL="file:./prisma/dev.db"
+    REDIS_HOST="localhost"
+    REDIS_PORT=6379
+    REDIS_PASSWORD=""
 
-Deploy e Network Binding
-Para o funcionamento correto no ambiente de nuvem (Railway), a aplicação foi reconfigurada para realizar o bind no host 0.0.0.0. Isso permitiu que o Proxy do Railway realizasse o roteamento de tráfego externo para a porta interna 3333, resolvendo erros críticos de SIGTERM e falhas de Health Check.
+🛡️ Por que o Redis é necessário?
+- Diferente do banco de dados (SQLite), o Redis atua como o motor de mensagens do BullMQ. Ele é responsável por:
+-   Assincronismo: Permite que a API continue respondendo enquanto o Crawler processa milhares de caracteres em background.
+-   Resiliência: Se a aplicação for reiniciada, o estado do scraping não é perdido; ele permanece na fila do Redis para ser retomado.
+-   Eficiência: Evita o consumo excessivo de memória RAM ao distribuir o processamento das tarefas de forma controlada.
 
-ATENÇÃO:  🚀
+5. **🏃 Execução**
+- Para rodar em modo de desenvolvimento com Hot Reload em todos os serviços simultaneamente:
+    npm run dev
+- Ou inicie serviços específicos via workspace:
+    Apenas a API:               npm run dev:api
+    Apenas o Crawler/Worker:    npm run dev:crawler
 
-**Nota sobre o Railway:** O projeto utiliza uma arquitetura de monorepo que demanda execução constante do Worker/Crawler. É importante notar que o plano **Trial do Railway** possui limitações de créditos e tempo. Após a expiração desse período de teste, a plataforma suspende os serviços, exigindo um upgrade para o plano pago (Hobby) para manter a API e o banco de dados ativos. O downgrade é inviável para a execução do projeto.
+## 📡 Endpoints Principais
+- GET /health: Check de saúde da aplicação e conexão com banco.
+- GET /characters: Retorna a lista de personagens processados do Bazaar.
+- GET /bazaar: Retorna dados ativos e filtros do leilão.
 
-Como Rodar o Projeto
-Pré-requisitos
-Node.js v22 ou superior
+## 🏗️ Decisões Técnicas e Desafios
+- Downgrade de Dependências: O @fastify/cors foi fixado na versão 8.x para garantir estabilidade com o Fastify 4, evitando conflitos de tipagem e falhas de handshake com o frontend.
+- Persistência: Optou-se pelo SQLite por ser um arquivo único, facilitando o backup e reduzindo a necessidade de um servidor de banco de dados externo (Postgres/MySQL) em estágios iniciais, o que otimiza o uso de memória.
+- Sincronização: O Crawler está programado via node-cron no arquivo server.ts para realizar a atualização pesada de dados em horários de menor tráfego (00:00), protegendo a saúde da instância.
 
-NPM
+## 🔄 Padrão de Commits
+- Utilizamos Conventional Commits para manter a governança:
+    feat: Nova funcionalidade.
+    fix: Correção de erro.
+    docs: Alteração em documentação.
+    chore: Atualização de pacotes ou build
 
-Instalação
-Bash
-# Instala as dependências de todos os workspaces
-npm install
-Banco de Dados
-Bash
-# Gera o Prisma Client e aplica as migrações
-npx prisma generate
-npx prisma migrate dev
-Execução
-Bash
-# Iniciar a API
-npm run dev --workspace=api
-
-# Iniciar o Crawler
-npm run dev --workspace=crawler
-📡 Endpoints Principais
-GET /health: Verificação de integridade do sistema.
-
-GET /characters: Lista todos os personagens processados.
-
-GET /bazaar: Retorna os dados ativos do leilão oficial.
-
-🛡️ Configuração de Ambiente (.env)
-O projeto requer as seguintes variáveis para operar no ambiente de produção:
-
-Plaintext
-PORT=3333
-HOST=0.0.0.0
-DATABASE_URL="file:./prisma/dev.db"
-👨‍💻 Desenvolvedor
-Luiz Gustavo (luizgustavolab)
+## 👨‍💻 Autor e Licença
+Desenvolvido por Luiz Gustavo 🔗 **[https://github.com/luizgustavolab](https://github.com/luizgustavolab)** .
+Código aberto integrante do ecossistema Tibia Scout. Contribuições são bem-vindas respeitando os padrões de commits estabelecidos.
